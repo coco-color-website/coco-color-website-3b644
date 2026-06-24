@@ -23,8 +23,39 @@ const REPO = process.env.GITHUB_REPO || "coco-color-website";
 const TOKEN = process.env.GITHUB_TOKEN;
 const FILE_PATH = "data/content.json";
 
+const NETLIFY_TOKEN = process.env.NETLIFY_TOKEN;
+const NETLIFY_SITE_ID = process.env.NETLIFY_SITE_ID;
+
 function isLocalDev() {
   return process.env.NODE_ENV === "development";
+}
+
+async function triggerNetlifyDeploy() {
+  if (!NETLIFY_TOKEN || !NETLIFY_SITE_ID) {
+    console.warn("Netlify deploy skipped: token or site id missing");
+    return;
+  }
+
+  try {
+    const res = await fetch(
+      `https://api.netlify.com/api/v1/sites/${NETLIFY_SITE_ID}/deploys`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${NETLIFY_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (!res.ok) {
+      console.error("Netlify deploy trigger failed:", await res.text());
+    } else {
+      console.log("Netlify deploy triggered");
+    }
+  } catch (err) {
+    console.error("Netlify deploy trigger error:", err);
+  }
 }
 
 export async function getContent(): Promise<SiteContent> {
@@ -102,6 +133,9 @@ export async function saveContent(content: SiteContent, message?: string) {
   if (!putRes.ok) {
     throw new Error(`GitHub API PUT failed: ${putRes.status} ${await putRes.text()}`);
   }
+
+  // 保存成功后触发 Netlify 重新部署
+  await triggerNetlifyDeploy();
 
   return await putRes.json();
 }
